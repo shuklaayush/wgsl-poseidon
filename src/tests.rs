@@ -1,114 +1,74 @@
-use rand::Rng;
-use stopwatch::Stopwatch;
-use num_bigint::BigUint;
-use crate::bn254::get_fr;
-use crate::gpu::single_buffer_compute;
+use std::vec;
+
+use crate::gpu::double_buffer_compute;
+use crate::utils::{bigints_to_bytes, u32s_to_bigints};
 use crate::wgsl::concat_files;
-use crate::utils::{ bigints_to_bytes, u32s_to_bigints };
+use ark_poly::DenseUVPolynomial;
+use num_bigint::BigUint;
+use stopwatch::Stopwatch;
+
+use ark_bn254::Fr;
+use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 
 #[test]
-pub fn test_pow_5() {
-    // The BN254 scalar field modulus
-    let p = get_fr();
+pub fn test_ntt() {
+    let num_polys = 10000;
+    let num_coeffs = 4;
 
-    let num_inputs = 256;
-    let mut inputs = Vec::with_capacity(num_inputs);
-    let mut expected = Vec::with_capacity(num_inputs);
+    // 1, w, w^2, w^3
+    let domain = GeneralEvaluationDomain::<Fr>::new(num_coeffs).unwrap();
 
-    for _ in 0..num_inputs {
-        // Generate a random field element
-        let mut rng = rand::thread_rng();
-        let random_bytes = rng.gen::<[u8; 32]>();
-        let a = BigUint::from_bytes_be(random_bytes.as_slice()) % &p;
+    let mut rng = rand::thread_rng();
 
-        inputs.push(a);
-    }
+    let polys: Vec<DensePolynomial<Fr>> = (0..num_polys)
+        .map(|_| DensePolynomial::<Fr>::rand(num_coeffs - 1, &mut rng))
+        .collect();
+    let coeffs: Vec<Vec<BigUint>> = polys
+        .iter()
+        .map(|poly| poly.coeffs().iter().map(|&c| BigUint::from(c)).collect())
+        .collect();
 
     let sw = Stopwatch::start_new();
-    for i in 0..num_inputs {
-        let a = inputs[i].clone();
-        let a_pow_5 = a.pow(5) % &p;
-        expected.push(a_pow_5);
-    }
+    let expected: Vec<Vec<BigUint>> = polys
+        .iter()
+        .map(|poly| {
+            domain
+                .fft(&poly)
+                .iter()
+                .map(|&c| BigUint::from(c))
+                .collect()
+        })
+        .collect();
     println!("CPU took {}ms", sw.elapsed_ms());
 
-    let input_to_gpu = bigints_to_bytes(inputs);
+    let input_to_gpu = bigints_to_bytes(&coeffs.iter().flatten().collect());
 
     // Send to the GPU
-    let wgsl = concat_files(
-        vec![
-            "src/wgsl/structs.wgsl",
-            "src/wgsl/storage.wgsl",
-            "src/wgsl/bigint.wgsl",
-            "src/wgsl/fr.wgsl",
-            "src/wgsl/pow_5.wgsl",
-        ]
-    );
+    let wgsl = concat_files(vec![
+        "src/wgsl/bigint.wgsl",
+        "src/wgsl/fr.wgsl",
+        "src/wgsl/ntt.wgsl",
+        "src/wgsl/structs.wgsl",
+    ]);
 
-    let sw = Stopwatch::start_new();
-    let result = pollster::block_on(single_buffer_compute(&wgsl, &input_to_gpu, num_inputs)).unwrap();
-    println!("GPU took {}ms", sw.elapsed_ms());
+    let out_buf = vec![0u8; input_to_gpu.len()];
+
+    // let sw = Stopwatch::start_new();
+    let result = pollster::block_on(double_buffer_compute(
+        &wgsl,
+        &out_buf,
+        &input_to_gpu,
+        num_polys,
+        num_coeffs,
+    ))
+    .unwrap();
+    // println!("GPU took {}ms", sw.elapsed_ms());
 
     let result = u32s_to_bigints(result);
 
-    for i in 0..num_inputs {
-        assert_eq!(result[i], expected[i]);
-    }
-}
-
-#[test]
-pub fn test_multi_pow_5() {
-    // The BN254 scalar field modulus
-    let p = get_fr();
-
-    let num_inputs = 256;
-    let mut inputs = Vec::with_capacity(num_inputs);
-    let mut expected = Vec::with_capacity(num_inputs);
-
-    for _ in 0..num_inputs {
-        // Generate a random field element
-        let mut rng = rand::thread_rng();
-        let random_bytes = rng.gen::<[u8; 32]>();
-        let a = BigUint::from_bytes_be(random_bytes.as_slice()) % &p;
-
-        inputs.push(a);
-    }
-
-    let times_to_pow = 512;
-
-    let sw = Stopwatch::start_new();
-    for i in 0..num_inputs {
-        let a = inputs[i].clone();
-        let mut a_pow_5 = a;
-        for _ in 0..times_to_pow {
-            a_pow_5 = a_pow_5.pow(5) % &p;
+    for i in 0..num_polys {
+        for j in 0..num_coeffs {
+            assert_eq!(result[i * num_coeffs + j], expected[i][j]);
         }
-
-        expected.push(a_pow_5);
-    }
-    println!("CPU took {}ms", sw.elapsed_ms());
-
-    let input_to_gpu = bigints_to_bytes(inputs);
-
-    // Send to the GPU
-    let wgsl = concat_files(
-        vec![
-            "src/wgsl/structs.wgsl",
-            "src/wgsl/storage.wgsl",
-            "src/wgsl/bigint.wgsl",
-            "src/wgsl/fr.wgsl",
-            "src/wgsl/multi_pow_5.wgsl",
-        ]
-    );
-
-    let sw = Stopwatch::start_new();
-    //let result = pollster::block_on(single_buffer_compute(&wgsl, &input_to_gpu, num_inputs)).unwrap();
-    let result = pollster::block_on(single_buffer_compute(&wgsl, &input_to_gpu, 1)).unwrap();
-    println!("GPU took {}ms", sw.elapsed_ms());
-
-    let result = u32s_to_bigints(result);
-
-    for i in 0..num_inputs {
-        assert_eq!(result[i], expected[i]);
     }
 }

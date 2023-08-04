@@ -1,3 +1,16 @@
+fn fr_get_zero() -> BigInt256 {
+    var p: BigInt256;
+
+    return p;
+}
+
+fn fr_get_one() -> BigInt256 {
+    var p: BigInt256;
+    p.limbs[0] = 1u;
+
+    return p;
+}
+
 fn fr_get_p() -> BigInt256 {
     var p: BigInt256;
     p.limbs[0] = 1u;
@@ -131,6 +144,33 @@ fn fr_add(a: ptr<function, BigInt256>, b: ptr<function, BigInt256>) -> BigInt256
     /*var res = bigint_add(a, b);*/
     bigint_add(a, b, &res);
     return fr_reduce(&res);
+}
+
+fn fr_sub(a: ptr<function, BigInt256>, b: ptr<function, BigInt256>) -> BigInt256 { 
+    var res: BigInt256;
+    var borrow: u32 = bigint_sub(a, b, &res);
+    if (borrow == 1u) {
+        var p: BigInt256 = fr_get_p();
+        bigint_add(&res, &p, &res);
+    }
+
+    return res;
+}
+
+fn fr_pow(a: ptr<function, BigInt256>, n: u32) -> BigInt256 {
+    var result: BigInt256 = fr_get_one();
+    var base: BigInt256 = *a;
+    var exp: u32 = n;
+
+    while (exp > 0u) {
+        if ((exp & 1u) == 1u) {
+            result = fr_mul(&result, &base);
+        }
+        base = fr_sqr(&base);
+        exp = exp >> 1u;
+    }
+
+    return result;
 }
 
 /*// once reduces once (assumes that 0 <= a < 2 * mod)*/

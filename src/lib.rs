@@ -1,8 +1,7 @@
-pub mod gpu;
-pub mod wgsl;
-pub mod utils;
 pub mod bn254;
-pub mod poseidon;
+pub mod gpu;
+pub mod utils;
+pub mod wgsl;
 
 #[cfg(test)]
 pub mod tests;

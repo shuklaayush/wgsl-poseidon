@@ -17,7 +17,7 @@ pub async fn device_setup_default(
 ) {
     //let adapters = wgpu::Instance::default();
     //for adapter in adapters.enumerate_adapters(wgpu::Backends::all()) {
-        //println!("{:?}", adapter.get_info())
+    //println!("{:?}", adapter.get_info())
     //}
 
     let instance = wgpu::Instance::default();
@@ -28,7 +28,8 @@ pub async fn device_setup_default(
             force_fallback_adapter: false,
             compatible_surface: None,
         })
-        .await.unwrap();
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(
@@ -59,8 +60,7 @@ pub async fn device_setup_default(
 
     // A command encoder executes one or many pipelines.
     // It is to WebGPU what a command buffer is to Vulkan.
-    let encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
     (instance, adapter, device, queue, compute_pipeline, encoder)
 }
@@ -75,7 +75,8 @@ pub async fn single_buffer_compute(
     num_x_workgroups: usize,
 ) -> Option<Vec<u32>> {
     let num_inputs = input_bytes.len() / 4;
-    let (_, _, device, queue, compute_pipeline, mut encoder) = device_setup_default(wgsl_source).await;
+    let (_, _, device, queue, compute_pipeline, mut encoder) =
+        device_setup_default(wgsl_source).await;
 
     // Gets the size in bytes of the buffer.
     let slice_size = num_inputs * std::mem::size_of::<u32>();
@@ -140,7 +141,7 @@ pub async fn single_buffer_compute(
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
- 
+
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
@@ -177,7 +178,8 @@ pub async fn double_buffer_compute(
     num_x_workgroups: usize,
     num_y_workgroups: usize,
 ) -> Option<Vec<u32>> {
-    let (_, _, device, queue, compute_pipeline, mut encoder) = device_setup_default(wgsl_source).await;
+    let (_, _, device, queue, compute_pipeline, mut encoder) =
+        device_setup_default(wgsl_source).await;
 
     // Gets the size in bytes of the buffers.
     let slice_size_a = input_bytes_a.len() * std::mem::size_of::<u8>();
@@ -249,7 +251,8 @@ pub async fn double_buffer_compute(
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group_0, &[]);
         cpass.insert_debug_marker("debug marker");
-        cpass.dispatch_workgroups(num_x_workgroups as u32, num_y_workgroups as u32, 1); // Number of cells to run, the (x,y,z) size of item being processed
+        cpass.dispatch_workgroups(num_x_workgroups as u32, num_y_workgroups as u32, 1);
+        // Number of cells to run, the (x,y,z) size of item being processed
     }
 
     // Sets adds copy operation to command encoder.
@@ -271,7 +274,7 @@ pub async fn double_buffer_compute(
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
- 
+
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
@@ -286,11 +289,10 @@ pub async fn double_buffer_compute(
         // dropped before we unmap the buffer.
         drop(data);
         staging_buffer_a.unmap(); // Unmaps buffer from memory
-                                // If you are familiar with C++ these 2 lines can be thought of similarly to:
-                                //   delete myPointer;
-                                //   myPointer = NULL;
-                                // It effectively frees the memory
-
+                                  // If you are familiar with C++ these 2 lines can be thought of similarly to:
+                                  //   delete myPointer;
+                                  //   myPointer = NULL;
+                                  // It effectively frees the memory
 
         // Returns data from buffer
         result_a = result;
