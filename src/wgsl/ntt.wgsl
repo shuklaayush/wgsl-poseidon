@@ -14,7 +14,7 @@ var<storage, read> buf_in: array<BigInt256>;
 // @binding(2)
 // var<storage, write> twiddles: array<BigInt256>;
 
-// var<workgroup> buf_tmp: array<BigInt256, 4u>;
+var<workgroup> buf_tmp: array<BigInt256, 4u>;
 
 // 2^2 th root of unity
 fn omega4() -> BigInt256 {
@@ -73,20 +73,19 @@ fn compute_twiddle_factors(n: u32, w: ptr<function, BigInt256>) -> array<BigInt2
 
 @compute
 @workgroup_size(4)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(workgroup_id) workgroup_id: vec3<u32>, @builtin(local_invocation_index) i: u32) {
     var n = 4u;
     var logn = 2u;
     var w: BigInt256 = omega4();
 
-    var offset = n * (global_id.x / n); // assume 0 for now
-    var i = global_id.x % n; // ith coefficient
-      
+    var offset = n * workgroup_id.x;
+    
     // Precompute twiddle factors
     var twiddles = compute_twiddle_factors(n, &w); 
     
     // Order based on reverse-bit
     var i_rev = reverse_bits(i, logn);
-    buf_out[offset + i] = buf_in[offset + i_rev];
+    buf_tmp[i] = buf_in[offset + i_rev];
     
     for(var s = 0u; s < logn; s += 1u) {
         // TODO: Do I need a storage barrier?
@@ -98,18 +97,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var j = (i / 2u * m) * 2u * m + k;
 
         if (j + m < n) {
-            var t = buf_out[offset + j];
-            var u = buf_out[offset + j + m];
+            var t = buf_tmp[j];
+            var u = buf_tmp[j + m];
 
             var twiddle = twiddles[k * (n / (m * 2u))];
 
             var v = fr_mul(&twiddle, &u);
 
             // Butterfly
-            buf_out[offset + j] = fr_add(&t, &v);
-            buf_out[offset + j + m] = fr_sub(&t, &v);
+            buf_tmp[j] = fr_add(&t, &v);
+            buf_tmp[j + m] = fr_sub(&t, &v);
         }
     }
     
-    // buf_out[offset + i] = buf_tmp[offset + i];
+    buf_out[offset + i] = buf_tmp[i];
 }

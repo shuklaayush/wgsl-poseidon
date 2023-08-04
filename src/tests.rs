@@ -12,7 +12,7 @@ use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationD
 
 #[test]
 pub fn test_ntt() {
-    let num_polys = 10000;
+    let num_polys = 20000;
     let num_coeffs = 4;
 
     // 1, w, w^2, w^3
@@ -65,6 +65,7 @@ pub fn test_ntt() {
     // println!("GPU took {}ms", sw.elapsed_ms());
 
     let result = u32s_to_bigints(result);
+    // println!("result: {:?}", result);
 
     for i in 0..num_polys {
         for j in 0..num_coeffs {
