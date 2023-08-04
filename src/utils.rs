@@ -71,10 +71,9 @@ pub fn bigints_to_bytes(vals: &Vec<&BigUint>) -> Vec<u8> {
     input_as_bytes.into_iter().flatten().collect()
 }
 
-
 /// Converts a vector of u32s into BigUints. The input vector should have a length that is a
 /// multiple of 16.
-pub fn u32s_to_bigints(b: Vec<u32>) -> Vec<BigUint> { 
+pub fn u32s_to_bigints(b: Vec<u32>) -> Vec<BigUint> {
     assert!(b.len() % 16 == 0);
     let chunks: Vec<Vec<u32>> = b
         .into_iter()
